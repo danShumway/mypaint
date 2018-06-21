@@ -81,16 +81,59 @@ class CanvasController (object):
 
         """
         object.__init__(self)
+
         self.tdw = tdw     #: the TiledDrawWidget being controlled.
+
+        self.gesture_rotate = Gtk.GestureRotate.new(self.tdw) #: Canvas rotation
+        self.gesture_zoom = Gtk.GestureZoom.new(self.tdw) #: Canvas zoom
+        # self.gesture_pan_vertical = Gtk.GesturePan.new(self.tdw, Gtk.Orientation.VERTICAL) #: Canvas panning up/down
+        # self.gesture_pan_horizontal = Gtk.GesturePan.new(self.tdw, Gtk.Orientation.HORIZONTAL) #: Canvas panning left/right
+
+
+        # Send events during the capture phase - otherwise events would need to be forwarded.
+        self.gesture_rotate.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self.gesture_zoom.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        # self.gesture_pan_vertical.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        # self.gesture_pan_horizontal.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
         self.modes = gui.mode.ModeStack(self)  #: stack of delegates
         self.modes.default_mode_class = gui.freehand.FreehandMode
 
     def init_pointer_events(self):
         """Establish TDW event listeners for pointer button presses & drags.
         """
+        self.tdw.connect("touch-event", self.button_press_cb)
         self.tdw.connect("button-press-event", self.button_press_cb)
         self.tdw.connect("motion-notify-event", self.motion_notify_cb)
         self.tdw.connect("button-release-event", self.button_release_cb)
+        self.gesture_rotate.connect('begin', self.angle_begin_cb_)
+        self.gesture_rotate.connect('angle_changed', self.angle_changed_cb)
+        self.gesture_zoom.connect('begin', self.scale_begin_cb_)
+        self.gesture_zoom.connect('scale_changed', self.scale_changed_cb_)
+
+        # self.gesture_pan_horizontal.connect('pan', self.pan_horizontal_cb_)
+        # self.gesture_pan_vertical.connect('pan', self.pan_vertical_cb_)
+
+    def scale_begin_cb_(self, gesture, sequence):
+        self.scale_base = self.tdw.scale
+
+    def scale_changed_cb_(self, controller, scale_delta):
+        scale = self.scale_base * scale_delta
+        self.tdw.set_zoom(scale)
+
+    def angle_begin_cb_(self, gesture, sequence):
+        self.base_angle = self.tdw.rotation
+
+    def angle_changed_cb(self, controller, gesture_angle, angle_delta):
+        angle = self.base_angle + angle_delta
+        self.tdw.set_rotation(angle)
+
+    # def pan_vertical_cb_(self, direction, offset, user_data):
+    #     print('vertical ')
+    #     print(offset)
+
+    # def pan_horizontal_cb_(self, direction, offset, user_data):
+    #     print(direction, offset)
 
     def init_scroll_events(self):
         """Establish TDW event listeners for scroll-wheel actions.
@@ -588,6 +631,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         mon = self.app.device_monitor
         dev = event.get_source_device()
         dev_settings = mon.get_device_settings(dev)
+
 
         if consider_mode_switch:
             buttonmap = self.app.button_mapping
